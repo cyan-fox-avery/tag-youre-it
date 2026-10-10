@@ -5,7 +5,7 @@
 "use strict";
 
 /* Build number — shown in the top corner of the page. Bump every release. */
-const VERSION = "v1.5.7-beta";
+const VERSION = "v1.5.13-beta";
 
 /* v1.4.2: standard IUCN Red List category abbreviations for the compact
    field-guide pills. Full category names appear in expanded entries. */
@@ -117,6 +117,25 @@ const WHATS_NEW = {
     "\uD83D\uDCBE <strong>Celebrations survive a reload.</strong> If the page reloads mid-expedition, Sarah's pending species celebration is recovered and delivered once — never lost, never doubled.",
     "\u270F\uFE0F <strong>Big Day copy polish.</strong> Two small dialogue fixes from Mira's review: time-neutral wording and a general shark-longevity fact.",
   ],
+  "v1.5.13-beta": [
+    "📑 <strong>Smaller tabs, tidier bar.</strong> Tablet tabs are smaller (icon, label, padding) so all 8 fit on one iPad row, no wrapping. On phones the tabs now sit in two neat centered rows of four.",
+  ],
+  "v1.5.12-beta": [
+    "📑 <strong>Eight tabs, one row — for real this time.</strong> Tighter type and a shrinkable label stack so all 8 tabs fit a single iPad row with no wrapping.",
+    "📖 <strong>Expanded field-guide cards show everything.</strong> No more internal scrolling — the card grows to fit the full description, and its top corners are rounded to match the bottom.",
+  ],
+  "v1.5.11-beta": [
+    "📸 <strong>Archive tab always visible.</strong> The Archive tab now stays in the tab bar from the start — greyed out and unclickable until Sarah's intro text unlocks it. This keeps all 8 tabs on one row with no layout shift.",
+  ],
+  "v1.5.10-beta": [
+    "🖼️ <strong>Archive is tagged-sharks only.</strong> The \"Still to discover\" locked list is gone — the Archive now shows just the sharks you have actually tagged, with Research-style name + color-coded IUCN badges (no checkmarks).",
+  ],
+  "v1.5.9-beta": [
+    "📑 <strong>All eight tabs, one row.</strong> The tab bar no longer wraps \"Achievements\" to a second line on tablets — the tabs share the row evenly.",
+  ],
+  "v1.5.8-beta": [
+    "📦 <strong>Safe batch.</strong> Seven low-risk fixes: \"Still to discover\" is plain text (no dropdown), release buttons reordered with matching yellow style, \"Follow\" first in encounters, Sarah uses tag IDs for unnamed sharks, double-tap zoom disabled, and tag-along insights live on the Collection card only.",
+  ],
   "v1.5.7-beta": [
     "\uD83D\uDCF1 <strong>Centered tabs everywhere.</strong> The tab bar now centers as a group on tablets and desktops too — no more left-shifted tabs.",
   ],
@@ -199,7 +218,6 @@ function playerHasSaveData() {
 }
 
 /* ---------- SVG art: simplified, real proportions, few colours ---------- */
-
 
 /* ---------- Ambient sea life: small silhouettes that drift through the dive ---------- */
 
@@ -1074,6 +1092,7 @@ const untagged = () => SHARKS.filter(s => !state.tagged[s.id]);
 const tabScroll = {};
 document.querySelectorAll(".tab").forEach(btn => {
   btn.addEventListener("click", () => {
+    if (btn.disabled) return; /* v1.5.11: locked Archive tab is unclickable */
     const current = document.querySelector(".tab.active");
     if (current) tabScroll[current.dataset.tab] = window.scrollY;
     document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
@@ -1248,25 +1267,7 @@ function togglePin(id) {
 }
 /* v0.20.0: jump to the pinned shark's field-guide entry. Mira review fix -
    clears any filters hiding the shark first, so Jump never silently fails. */
-function jumpToPinned(s, list) {
-  if (!list.querySelector(`[data-entry="${s.id}"]`) && activeFilterCount() > 0) {
-    clearGuideFilters();
-  }
-  const target = list.querySelector(`[data-entry="${s.id}"]`);
-  if (target) {
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
-    const body = target.querySelector(".guide-row-body");
-    const head = target.querySelector(".guide-row-head");
-    if (body && body.classList.contains("hidden")) {
-      body.classList.remove("hidden");
-      head.setAttribute("aria-expanded", "true");
-      target.classList.add("open");
-      target.style.zIndex = String(++guideOverlayZ);
-    }
-    target.classList.add("pin-flash");
-    setTimeout(() => target.classList.remove("pin-flash"), 1200);
-  }
-}
+
 /* v1.4.15-beta: highlight key research clues in bold (same font/size).
    Bolds location, diet, and depth cues — never the expedition answers. */
 function highlightClues(s) {
@@ -1318,10 +1319,8 @@ function renderPinnedCard(list) {
           <span class="latin">${REGIONS[s.combo.region] ? REGIONS[s.combo.region].name : s.combo.region} · ${s.depths.map(d => (DEPTHS[d] || {}).name || d).join(", ")}</span>
         </div>
       </div>
-      <p class="pinned-research">${researchPreview}</p>
-      <button type="button" class="pin-jump" data-jump="${s.id}">Jump to field-guide entry ↓</button>`;
+      <p class="pinned-research">${researchPreview}</p>`;
     card.querySelector("[data-unpin]").addEventListener("click", () => togglePin(s.id));
-    card.querySelector("[data-jump]").addEventListener("click", () => jumpToPinned(s, list));
   }
   target.appendChild(card);
 }
@@ -2012,7 +2011,8 @@ function doEncounter(species, plan) {
           }
         });
       });
-      actions.appendChild(followBtn);
+      /* v1.5.8-beta: "Follow" goes first, "Just watch" second. */
+      actions.insertBefore(followBtn, watchBtn);
       /* v0.8.0: it's one of yours — log the re-sighting. */
       const resightBtn = document.createElement("button");
       resightBtn.className = "secondary-button";
@@ -2412,7 +2412,8 @@ function maybeReunionReaction(species, rec) {
   if (state.reunionReacted[species.id]) return;
   state.reunionReacted[species.id] = true;
   try { localStorage.setItem("tyi-reunion-reacted", JSON.stringify(state.reunionReacted)); } catch {}
-  const name = rec.name ? `\u201c${esc(rec.name)}\u201d` : species.name;
+  /* v1.5.8-beta: unnamed sharks are called by research tag ID, not species name. */
+  const name = rec.name ? `\u201c${esc(rec.name)}\u201d` : (rec.researchId || species.name);
   const thread = [
     { who: "them", text: `WAIT. You saw ${name} again?!?` },
     { who: "me", text: `The tag matched — it's really them.` },
@@ -3368,15 +3369,11 @@ function doTagAlong() {
     const rec = state.tagged[s.id];
     const displayName = (rec && rec.name) || s.name;
     logLine(`🌊 ${esc(displayName)} is back in the water — tag secure, swimming strong.`);
-    /* v1.4.0-beta: tag-along unlocks a secret fact (or the graceful exhaustion line). */
+    /* v1.5.8-beta: the insight lives on the Collection card only — not in the log. */
     const fact = unlockSecretFact(s.id);
-    if (fact) {
-      logLine(`🔬 <strong>Tag-along insight:</strong> ${esc(fact)}`);
-      state.pendingTagAlongFact = { speciesId: s.id, fact, exhausted: false };
-    } else {
-      logLine(`🔬 <em>I've learned all I can — the rest is in the specialists' hands now.</em>`);
-      state.pendingTagAlongFact = { speciesId: s.id, fact: null, exhausted: true };
-    }
+    state.pendingTagAlongFact = fact
+      ? { speciesId: s.id, fact, exhausted: false }
+      : { speciesId: s.id, fact: null, exhausted: true };
     logLine(`🧭 You're changing course to follow ${esc(displayName)} — no more encounters this trip.`);
   }
   renderAll();

@@ -16,6 +16,8 @@
 
 body {
   margin: 0;
+  /* v1.5.8-beta: kill double-tap zoom on touch devices; pinch zoom still works. */
+  touch-action: manipulation;
   font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
   /* v0.19.1: the descent — surface light at the top, deep dark below.
      No background-attachment:fixed — the gradient belongs to the document,
@@ -216,6 +218,11 @@ body { overflow-x: clip; }
   min-width: 0; box-sizing: border-box;
 }
 .tab.active { background: var(--accent); color: var(--accent-ink); }
+/* v1.5.11: locked Archive tab — visible but greyed out and unclickable.
+   Keeps the tab count stable at 8 so the bar never re-wraps. */
+.tab[disabled], .tab.tab-locked {
+  opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6);
+}
 .count-badge {
   background: var(--bg-deep); color: var(--ink); border-radius: 999px;
   padding: 1px 8px; font-size: 12px; margin-left: 2px;
@@ -257,17 +264,31 @@ body { overflow-x: clip; }
    (Review fix: this block sits AFTER the general .tab rule — equal
    specificity, so source order decides.) */
 @media (max-width: 559px) {
-  /* v1.5.6/v1.5.7: phone tabs stay flex — every row centers. */
+  /* v1.5.13: Avery — two centered rows of 4 on phones (4+4). */
   .tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-  .tab { flex: 0 1 108px; font-size: 13px; padding: 10px 2px; }
+  .tab { flex: 0 1 calc(25% - 5px); font-size: 12px; padding: 10px 2px; }
   /* v1.4.0: Avery — count tabs keep the column stack on phones too:
      count on top, icon on its own row, label below (Collection, Achievements). */
   .dive-scene { top: 160px; }
 }
-/* v1.4.0: tablets / small landscape — four equal tabs per row, two rows,
-   so every tab keeps the same width without squeezing labels. */
-@media (min-width: 560px) and (max-width: 1023px) {
-  .tab { flex-basis: 150px; } /* 4 per row on tablets, rows centered */
+/* v1.5.13: Avery — smaller single-row tabs on tablets so all 8 fit.
+   Narrow tablets (560–699px) get 9px labels; wider (700–1023px) get 10px.
+   flex-wrap: nowrap guarantees one row; min-width: 0 through the whole
+   icon/label chain lets long labels ("Achievements") shrink instead of
+   forcing a wrap. No transforms, no compositing. */
+@media (min-width: 560px) and (max-width: 699px) {
+  .tabs { gap: 4px; flex-wrap: nowrap; }
+  .tab { flex: 1 1 0; min-width: 0; font-size: 9px; padding: 8px 1px; }
+  .tab-icon { font-size: 14px; }
+  .tab-stack { min-width: 0; }
+  .tab-label { white-space: nowrap; min-width: 0; }
+}
+@media (min-width: 700px) and (max-width: 1023px) {
+  .tabs { gap: 6px; flex-wrap: nowrap; }
+  .tab { flex: 1 1 0; min-width: 0; font-size: 10px; padding: 8px 2px; }
+  .tab-icon { font-size: 16px; }
+  .tab-stack { min-width: 0; }
+  .tab-label { white-space: nowrap; min-width: 0; }
 }
 
 .panel { display: none; }
@@ -337,6 +358,11 @@ select option:disabled { color: #7a8a9e; }
 }
 .primary-button:active { transform: scale(0.98); }
 .primary-button:disabled { opacity: 0.5; cursor: default; }
+/* v1.5.8-beta: "Release & keep diving" matches the tag-along yellow gradient. */
+#releaseBtn {
+  background: linear-gradient(180deg, #ffd166 0%, #f0b429 100%);
+  border: 2px solid #b8860b; color: #3a2b00;
+}
 .secondary-button {
   width: 100%; margin-top: 8px; padding: 11px; font-size: 14px; font-weight: 700;
   border: 2px solid var(--ink-dim); border-radius: 14px; cursor: pointer;
@@ -1049,19 +1075,25 @@ select option:disabled { color: #7a8a9e; }
    column widening (absolute elements don't participate in grid sizing). */
 .guide-row { position: relative; min-width: 0; }
 .guide-row.open { overflow: visible; z-index: 20; }
+/* v1.5.12: expanded cards show the full description — no internal scrolling,
+   the card grows to fit its content. Top corners rounded to match the bottom. */
 .guide-row.open .guide-row-body {
   position: absolute; top: 100%; left: 0; width: 100%; max-width: 100%; min-width: 0; z-index: 20;
   background: var(--bg-card);
-  border-radius: 0 0 var(--radius) var(--radius);
+  border-radius: var(--radius);
   box-shadow: 0 18px 36px rgba(0,0,0,0.55);
-  max-height: 62vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 /* v1.5.2-beta: on small screens the expanded card becomes a centered modal
    so the full content is always reachable — no more cut-off bottoms. */
 @media (max-width: 768px) {
+  /* v1.5.2-beta: on small screens the expanded card becomes a centered modal
+     so the full content is always reachable — no more cut-off bottoms.
+     v1.5.12: top-anchored (not vertically centered) so a tall card can never
+     clip its close button; no max-height, no internal scroll — the card
+     grows to fit its full content. */
   .guide-row.open .guide-row-body {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: calc(100vw - 32px); max-width: 520px; max-height: 80vh;
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    width: calc(100vw - 32px); max-width: 520px;
     border-radius: var(--radius);
   }
 }
@@ -1112,17 +1144,7 @@ select option:disabled { color: #7a8a9e; }
 /* v1.4.15-beta: pinned research preview — clues in bold, same font/size */
 .pinned-research { font-size: 13px; line-height: 1.5; color: #dcebf5; margin: 8px 0 4px; }
 .pinned-research strong { font-weight: 700; }
-.pin-jump {
-  width: 100%; min-height: 48px; border-radius: 12px; font-size: 1rem; font-weight: 700;
-  background: rgba(255,209,102,0.15); border: 1px solid rgba(255,209,102,0.4);
-  color: var(--ink); cursor: pointer;
-}
-.pin-flash { animation: pin-flash 1.2s ease; }
-@keyframes pin-flash {
-  0%, 100% { box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
-  30% { box-shadow: 0 0 0 3px rgba(255,209,102,0.7); }
-}
-@media (prefers-reduced-motion: reduce) { .pin-flash { animation: none; } }
+
 /* v0.20.0: pinned-shark line on the Expedition tab. */
 .expedition-pin {
   background: rgba(255,209,102,0.08); border: 1px solid rgba(255,209,102,0.3);
@@ -1393,20 +1415,8 @@ video.archive-media { max-height: 420px; }
   .research-text { font-size: 15px; }
 }
 
-/* v1.2.0-beta: locked archive placeholders (for Mira's review) */
-.archive-locked { text-align: center; padding: 18px 12px; }
-.archive-locked-art { opacity: 0.35; filter: grayscale(1); max-width: 220px; margin: 0 auto 10px; }
-.archive-locked-art svg { width: 100%; height: auto; }
-.locked-pill { background: rgba(255,255,255,0.08); }
-.archive-locked-row .guide-row-name { opacity: 0.75; }
-
-/* v1.2.0-beta Mira review: collapsed "Still to discover" archive section. */
-.archive-still-locked { margin-top: 14px; }
-.archive-still-locked > summary {
-  cursor: pointer; font-weight: 700; font-size: 15px; color: var(--ink-dim, #9db8c9);
-  padding: 10px 4px; list-style-position: inside;
-}
-.archive-still-locked > summary::-webkit-details-marker { color: var(--ink-dim, #9db8c9); }
+/* v1.5.10-beta: locked archive list removed — the Archive shows tagged
+   sharks only. (Placeholder/locked styles retired.) */
 
 /* v1.3.0-beta: field notes from "Just watch" encounters */
 .watch-notes-block {

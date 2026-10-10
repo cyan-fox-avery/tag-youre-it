@@ -38,7 +38,7 @@ code += `
 ;(function tests(){
   const out = [];
   const ok = (name, cond) => out.push((cond ? 'PASS' : 'FAIL') + ' ' + name);
-  ok('version v1.5.7-beta', VERSION === 'v1.5.7-beta');
+  ok('version v1.5.13-beta', VERSION === 'v1.5.13-beta');
 
   // roster
   ok('roster is 50', SHARKS.length === 50);
@@ -173,10 +173,27 @@ code += `
   ok('license links to canonical CC URL', clipHtml.includes('href="https://creativecommons.org/licenses/by/3.0/"'));
   const pdHtml = archiveAssetHtml({ type: 'photo', caption: 'x', credit: 'NOAA', license: 'Public domain', page: 'https://example.com', image: 'https://example.com/i.jpg' }, false);
   ok('public-domain uses neutral Credit (no \u00a9)', pdHtml.includes('Credit NOAA') && !pdHtml.includes('\u00a9 NOAA'));
-  // v1.2.0-beta (for Mira's review): locked species show as placeholders,
-  // photos still require an actual tag
-  ok('dossiers require an actual tag for photos', fileCode.includes('const isLocked = !state.tagged[s.id]'));
-  ok('locked archive shows placeholder', fileCode.includes('archive-locked'));
+  // v1.5.10-beta: Archive is tagged-sharks only — no locked list at all.
+  // Untagged species are skipped before rendering, so photos still require
+  // an actual tag.
+  const archiveUiCode = fs.readFileSync(path.join(DIR, 'archive-ui.js'), 'utf8');
+  ok('archive skips untagged species', archiveUiCode.includes('if (!t) return;'));
+  ok('archive has no locked list', !archiveUiCode.includes('lockedRows') && !archiveUiCode.includes('Still to discover'));
+  ok('archive uses Research-style IUCN pill', archiveUiCode.includes('status-pill iucn-'));
+  ok('archive has no checkmark', !archiveUiCode.includes('✅'));
+  // v1.5.11-beta: Archive tab always visible, locked until Sarah's text.
+  ok('updateArchiveTab toggles locked state not hidden',
+    archiveUiCode.includes('toggle("tab-locked"') && !archiveUiCode.includes('toggle("hidden", !state.archiveUnlocked'));
+  ok('archive tab has disabled attr support',
+    archiveUiCode.includes('btn.disabled'));
+  ok('tab click handler skips disabled tabs',
+    code.includes('if (btn.disabled) return;'));
+  ok('disabled tabs are greyed out',
+    cssCode.includes('.tab[disabled]') && cssCode.includes('cursor: not-allowed'));
+  ok('archive tab not hidden in HTML',
+    htmlCode.includes('data-tab="archive"') && !htmlCode.includes('class="tab hidden" data-tab="archive"'));
+  ok('archive tab starts disabled in HTML',
+    htmlCode.includes('data-tab="archive" type="button" disabled'));
   // v0.17.0 review fix: every non-public-domain CC license in the data must
   // have a LICENSE_URLS entry, so new sharks can't silently lose license links.
   const usedLicenses = new Set();
@@ -501,16 +518,6 @@ code += `
     const html = document.getElementById('expeditionPin').innerHTML;
     state.pinned = null; renderExpeditionPin();
     return !html.includes('[object Object]') && html.includes('Surface');
-  })());
-  ok('jump clears filters hiding the pinned shark', (() => {
-    state.pinned = 'dusky';
-    guideFilters.q = 'zzzz-no-match';
-    // filtered-out state: the entry is not in the rendered list
-    const list = { querySelector() { return null; } };
-    jumpToPinned(SHARKS.find(s => s.id === 'dusky'), list);
-    const cleared = activeFilterCount() === 0;
-    state.pinned = null;
-    return cleared;
   })());
   ok('repeat-plan with no method clears the planner method', (() => {
     const mk = (vals) => {
@@ -1515,12 +1522,17 @@ code += `
   (() => {
     ok("tabs use flexbox (v1.5.7)", /\\.tabs\\s*\\{[^}]*display:\\s*flex/.test(cssCode));
   ok("desktop tabs have flex-basis pills", /\\.tab\\s*\\{[^}]*flex:\\s*0\\s+1\\s+108px/.test(cssCode));
-  ok("tablet tabs wider (v1.5.7)", /max-width:\\s*1023px[\\s\\S]*?\\.tab\\s*\\{[^}]*flex-basis:\\s*150px/.test(cssCode));
+  ok("tablet tabs single row (v1.5.9)", /max-width:\\s*1023px[\\s\\S]*?\\.tab\\s*\\{[^}]*flex:\\s*1\\s+1\\s+0/.test(cssCode));
+  ok("tablet tabs no fixed 150px basis (v1.5.9)", !/max-width:\\s*1023px[\\s\\S]*?\\.tab\\s*\\{[^}]*flex-basis:\\s*150px/.test(cssCode));
+  ok("tablet tabs tighter type fit 8 in a row (v1.5.13)", /min-width:\\s*700px[\\s\\S]*?\\.tab\\s*\\{[^}]*font-size:\\s*10px/.test(cssCode));
+  ok("tablet tabs no-wrap single row (v1.5.13)", /min-width:\\s*560px[\\s\\S]*?\\.tabs\\s*\\{[^}]*flex-wrap:\\s*nowrap/.test(cssCode));
+  ok("tablet tab icons smaller (v1.5.13)", /min-width:\\s*700px[\\s\\S]*?\\.tab-icon\\s*\\{[^}]*font-size:\\s*16px/.test(cssCode));
+  ok("tablet tab-stack shrinkable (v1.5.12)", /max-width:\\s*1023px[\\s\\S]*?\\.tab-stack\\s*\\{[^}]*min-width:\\s*0/.test(cssCode));
   ok("phone tabs use flex-wrap (v1.5.6)", /max-width:\\s*559px[\\s\\S]*?\\.tabs\\s*\\{[^}]*display:\\s*flex/.test(cssCode));
     ok("phone tabs wrap", /max-width:\\s*559px[\\s\\S]*?\\.tabs\\s*\\{[^}]*flex-wrap:\\s*wrap/.test(cssCode));
     ok("phone tabs center every row", /max-width:\\s*559px[\\s\\S]*?\\.tabs\\s*\\{[^}]*justify-content:\\s*center/.test(cssCode));
-    ok("phone tabs keep ~3-per-row size", /max-width:\\s*559px[\\s\\S]*?\\.tab\\s*\\{[^}]*flex:\\s*0\\s+1\\s+108px/.test(cssCode));
-    ok("no flex-basis tab sizing remains", !/\\.tab\\s*\\{[^}]*flex:\\s*1\\s+1\\s+(0|22%|30%)/.test(cssCode));
+    ok("phone tabs two rows of four (v1.5.13)", /max-width:\\s*559px[\\s\\S]*?\\.tab\\s*\\{[^}]*flex:\\s*0\\s+1\\s+calc\\(25%/.test(cssCode));
+    ok("flex 1-1-0 only inside tablet query (v1.5.9)", !/\\.tab\\s*\\{[^}]*flex:\\s*1\\s+1\\s+0(?![^}]*\\})[\\s\\S]*?@media/.test(cssCode.split("@media (min-width: 560px)")[0]));
     ok("tab-stack stays column on phones", !/max-width:\\s*559px[\\s\\S]*?\\.tab-stack\\s*\\{[^}]*flex-direction:\\s*row/.test(cssCode));
   })();
   // v1.4.0-beta Mira review: pushThread while Phone is open marks thread read
@@ -1600,7 +1612,8 @@ code += `
   (() => {
     ok("open guide body is absolutely positioned", /\\.guide-row\\.open\\s+\\.guide-row-body\\s*\\{[^}]*position:\\s*absolute/.test(cssCode));
     ok("open guide row lifts overflow clipping", /\\.guide-row\\.open\\s*\\{[^}]*overflow:\\s*visible/.test(cssCode));
-    ok("open guide body scrolls internally", /\\.guide-row\\.open\\s+\\.guide-row-body\\s*\\{[^}]*overflow-y:\\s*auto/.test(cssCode));
+    ok("open guide body has no internal scroll (v1.5.12)", !/\\.guide-row\\.open\\s+\\.guide-row-body\\s*\\{[^}]*overflow-y:\\s*auto/.test(cssCode));
+    ok("open guide body top corners rounded (v1.5.12)", /\\.guide-row\\.open\\s+\\.guide-row-body\\s*\\{[^}]*border-radius:\\s*var\\(--radius\\)/.test(cssCode));
   })();
   // v1.5.5-beta: guide popup is closable — close button, Escape, outside tap
   (() => {
@@ -1715,6 +1728,18 @@ code += `
   ok('WHATS_NEW has v1.5.5-beta', Array.isArray(WHATS_NEW['v1.5.5-beta']) && WHATS_NEW['v1.5.5-beta'].length > 0);
   ok('WHATS_NEW has v1.5.6-beta', Array.isArray(WHATS_NEW['v1.5.6-beta']) && WHATS_NEW['v1.5.6-beta'].length > 0);
   ok('WHATS_NEW has v1.5.7-beta', Array.isArray(WHATS_NEW['v1.5.7-beta']) && WHATS_NEW['v1.5.7-beta'].length > 0);
+  ok('WHATS_NEW has v1.5.9-beta', Array.isArray(WHATS_NEW['v1.5.9-beta']) && WHATS_NEW['v1.5.9-beta'].length > 0);
+  ok('WHATS_NEW has v1.5.10-beta', Array.isArray(WHATS_NEW['v1.5.10-beta']) && WHATS_NEW['v1.5.10-beta'].length > 0);
+  ok('WHATS_NEW has v1.5.11-beta', Array.isArray(WHATS_NEW['v1.5.11-beta']) && WHATS_NEW['v1.5.11-beta'].length > 0);
+  ok('WHATS_NEW has v1.5.13-beta', Array.isArray(WHATS_NEW['v1.5.13-beta']) && WHATS_NEW['v1.5.13-beta'].length > 0);
+  // v1.5.8: safe batch — seven low-risk items
+  ok('still-to-discover heading removed', !archiveUiCode.includes('archive-still-locked-head') && !cssCode.includes('archive-still-locked-head'));
+  ok('release buttons reordered', htmlCode.indexOf('id="tagAlongBtn"') < htmlCode.indexOf('id="releaseShipBtn"'));
+  ok('release button matches tag-along gradient', cssCode.includes('#releaseBtn') && cssCode.includes('linear-gradient(180deg, #ffd166 0%, #f0b429 100%)'));
+  ok('follow button before watch button', code.includes('insertBefore(followBtn, watchBtn)'));
+  ok('reunion uses research ID for unnamed', code.includes('rec.researchId || species.name'));
+  ok('double-tap zoom disabled', cssCode.includes('touch-action: manipulation'));
+  ok('tag-along insight not in log', !code.split('function doTagAlong')[1].split('function doFollowTagged')[0].includes('Tag-along insight'));
   // v1.5.1: header/phone/archive/porthole batch
   ok('header is tighter', /\\.topbar\\s*\\{[^}]*padding:\\s*10px 8px 4px/.test(cssCode));
   ok('phone renders messages in one pass', /list\\.innerHTML = html;/.test(code) && /let html = "";/.test(code));
